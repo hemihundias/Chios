@@ -1,7 +1,7 @@
 /*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
+ * 
+ * https://github.com/hemihundias/Chios
+ * 
  */
 package ad.chios;
 
@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
 import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.bson.BsonDocument;
 import org.bson.conversions.Bson;
 
@@ -45,10 +47,10 @@ public class Menu {
     private static MongoClient mongo;
     private static File datos = new File("config.json");
     private static String nome, username, contrasinal, text, hashtag, follow;
-    private static final String  PATTERN = "(\\s|\\A)#(\\w+)";
+    private static final String  PATTERN = "#[a-zA-Zñáéíóúü]+";
     private static DBCollection colUsuarios, colMensaxes;
     private static DB mdb;
-    private static List<DBObject> arrayHashtags = new ArrayList<DBObject>();
+    private static List<String> arrayHashtags = new ArrayList<String>();
     private static List<DBObject> arrayFollows = new ArrayList<DBObject>();
     private static List<DBObject> arrayFol = new ArrayList<DBObject>();
     
@@ -240,27 +242,17 @@ public class Menu {
         return nameAux;  
     }
     
-    public static void escribirmensaxe(){
-        while(true){
-            System.out.println("Por favor, introduza un hastag para a mensaxe:\n");
-            hashtag = teclado.nextLine();
-            while(!hashtag.matches(PATTERN)){
-                System.out.println("\nFormato incorrecto, escríbao de novo.\n");
-                hashtag = teclado.nextLine();
-            }
-            arrayHashtags.add(new BasicDBObject("hasthags",hashtag));
-            
-            System.out.println("¿Quere introducir outro hasthag?(si/*)");
-            if(teclado.nextLine().equalsIgnoreCase("si")){
-                
-            }else{
-                break;
-            }
-        }        
-        
+    public static void escribirmensaxe(){                
         System.out.println("Agora escriba a mensaxe e pulse enter ao rematar.\n");
         String mensaxeEscrita = teclado.nextLine();                    
-
+        Pattern pattern = Pattern.compile(PATTERN);
+        
+        Matcher matcher = pattern.matcher(mensaxeEscrita);
+        
+        while(matcher.find()){
+            arrayHashtags.add(matcher.group().substring(1));            
+        }
+        
         DBObject mensaxe = new BasicDBObject()
                 .append("text", mensaxeEscrita)
                 .append("user", new BasicDBObject()
@@ -301,10 +293,10 @@ public class Menu {
             hashtag = teclado.nextLine();
         }        
         
-        Bson filter = Filters.eq("hasthtags", hashtag);
+        Bson filter = Filters.eq("hashtags", hashtag.substring(1));
         DBObject query = new BasicDBObject(filter.toBsonDocument(BsonDocument.class, MongoClient.getDefaultCodecRegistry()));
         System.out.println(query.toString());
-        DBCursor cursor  = colUsuarios.find(query);
+        DBCursor cursor  = colMensaxes.find(query);
         while (cursor.hasNext()){
             DBObject documentoAux = cursor.next();
             System.out.println(documentoAux.toString());

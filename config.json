@@ -1,0 +1,8 @@
+{    
+    "address":"192.168.56.102",
+    "port":"27017",
+    "dbname":"config",
+    "username":"admin",
+    "password":"@cc3s0@d@t0s"    
+    
+}

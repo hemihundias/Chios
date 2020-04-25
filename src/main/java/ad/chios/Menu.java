@@ -1,8 +1,3 @@
-/*
- * 
- * https://github.com/hemihundias/Chios
- * 
- */
 package ad.chios;
 
 import com.google.gson.Gson;
@@ -55,8 +50,7 @@ public class Menu {
     private static int i;
     
     public static void main(String args[]){                     
-        confBD();
-        
+        confBD();        
         try{
             mongo = new MongoClient(bd.getAddress(),bd.getPort());
             mdb = mongo.getDB(bd.getDbname());
@@ -64,8 +58,7 @@ public class Menu {
             colMensaxes = mdb.getCollection("mensaxes");
         }catch (Exception e){
             
-        }
-        
+        }        
         menuLoguin();
             
     }
@@ -264,14 +257,15 @@ public class Menu {
             MongoClient.getDefaultCodecRegistry()));
         options.sort(sort);
         DBCursor cursor  = colMensaxes.find(new BasicDBObject(),options);
-        while (cursor.hasNext()){
-            BasicBDObject dbo = (BasicDBObject) cursor.next();            
-            DBObject object = (DBObject) dbo.get("user");
+        while (cursor.hasNext()){         
+            BasicDBObject object = (BasicDBObject) cursor.next();
+            DBObject bdo = (DBObject) object.get("user");
             
-            System.out.println("\n" + object.get("username"));
-            System.out.println(object.get("nome"));
-            System.out.println(dbo.get("text")); 
-            System.out.println(dbo.get("date") + "\n");
+            System.out.println(bdo.get("\n" + "username"));
+            System.out.println(bdo.get("nome"));
+            System.out.println(object.get("text"));
+            System.out.println(object.get("date" + "\n"));
+            
         }
         cursor.close();
     }

@@ -43,16 +43,16 @@ import org.bson.conversions.Bson;
 public class Menu {    
     private static BaseDatos bd;
     private static Scanner teclado = new Scanner(System.in);
-    private static String entrada;
     private static MongoClient mongo;
     private static File datos = new File("config.json");
-    private static String nome, username, contrasinal, text, hashtag, follow;
+    private static String entrada, nome, username, contrasinal, text, hashtag, follow;
     private static final String  PATTERN = "#[a-zA-Zñáéíóúü]+";
     private static DBCollection colUsuarios, colMensaxes;
     private static DB mdb;
     private static List<String> arrayHashtags = new ArrayList<String>();
     private static List<DBObject> arrayFollows = new ArrayList<DBObject>();
-    private static List<DBObject> arrayFol = new ArrayList<DBObject>();
+    private static List<String> arrayFol = new ArrayList<String>();
+    private static int i;
     
     public static void main(String args[]){                     
         confBD();
@@ -112,26 +112,11 @@ public class Menu {
         }
                             
         System.out.println("Introsuza un contrasinal:\n");
-            contrasinal = teclado.nextLine();
+            contrasinal = teclado.nextLine();               
                 
-        while(true){
-            System.out.println("Por favor, introduza a persoa a que quere seguir:\n");
-            follow = teclado.nextLine();
-            
-            arrayFollows.add(new BasicDBObject("follows",follow));
-            
-            System.out.println("¿Quere seguir a outra persoa?(si/*)");
-            if(teclado.nextLine().equalsIgnoreCase("si")){
-                
-            }else{
-                break;
-            }
-        }        
-        
         DBObject usuario = new BasicDBObject()
             .append("nome", nome)
             .append("username", username)
-            .append("follows", arrayFollows)
             .append("contrasinal", contrasinal);
 
         colUsuarios.insert(usuario);    
@@ -154,9 +139,9 @@ public class Menu {
         System.out.println("Introduza o seu username:\n");
         username= teclado.nextLine(); 
 
-        while(!consultaUsername(username)){
-            System.out.println("Username non atopado, introdúzao de novo.\n");
-            username = teclado.nextLine();
+        if(!consultaUsername(username)){
+            System.out.println("\nUsername non atopado.\n");
+            menuLoguin();
         }
 
         System.out.println("Introduza o contrasinal:\n");
@@ -210,7 +195,7 @@ public class Menu {
                     escribirmensaxe();
                     break;
                 case "5":
-                    buscarUsuario();
+                    buscarUsuario(username);
                     break;
                 case "6":
                     menuLoguin();
@@ -270,16 +255,23 @@ public class Menu {
     public static void listarMensaxes(){
         DBCollectionFindOptions options = new DBCollectionFindOptions();
         Bson projectionAux = Projections.include(Arrays.asList("user.nome","user.username","text","date"));
-        DBObject projection = new BasicDBObject(projectionAux.toBsonDocument(BsonDocument.class, MongoClient.getDefaultCodecRegistry()));
+        DBObject projection = new BasicDBObject(projectionAux.toBsonDocument(BsonDocument.class, 
+            MongoClient.getDefaultCodecRegistry()));
         options.projection(projection);
         options.limit(5);
         Bson sortAux = Sorts.descending("date");
-        DBObject sort = new BasicDBObject(sortAux.toBsonDocument(BsonDocument.class, MongoClient.getDefaultCodecRegistry()));
+        DBObject sort = new BasicDBObject(sortAux.toBsonDocument(BsonDocument.class, 
+            MongoClient.getDefaultCodecRegistry()));
         options.sort(sort);
         DBCursor cursor  = colMensaxes.find(new BasicDBObject(),options);
         while (cursor.hasNext()){
-            DBObject documentoAux = cursor.next();
-            System.out.println(documentoAux.toString());
+            BasicBDObject dbo = (BasicDBObject) cursor.next();            
+            DBObject object = (DBObject) dbo.get("user");
+            
+            System.out.println("\n" + object.get("username"));
+            System.out.println(object.get("nome"));
+            System.out.println(dbo.get("text")); 
+            System.out.println(dbo.get("date") + "\n");
         }
         cursor.close();
     }
@@ -294,8 +286,9 @@ public class Menu {
         }        
         
         Bson filter = Filters.eq("hashtags", hashtag.substring(1));
-        DBObject query = new BasicDBObject(filter.toBsonDocument(BsonDocument.class, MongoClient.getDefaultCodecRegistry()));
-        System.out.println(query.toString());
+        DBObject query = new BasicDBObject(filter.toBsonDocument(BsonDocument.class, 
+                MongoClient.getDefaultCodecRegistry()));
+        
         DBCursor cursor  = colMensaxes.find(query);
         while (cursor.hasNext()){
             DBObject documentoAux = cursor.next();
@@ -333,42 +326,69 @@ public class Menu {
     }
 
     private static void mensaxesFollows(String username) {
-                        
-        /*BasicDBObject query = new BasicDBObject("username", username);
-        BasicDBObject fields = new BasicDBObject().append("_id", 0);
-        fields.put("follows", 1);
-
-        DBCursor cursor = colUsuarios.find(query, fields);
-        while (cursor.hasNext()) {
-            arrayFol.add(cursor.next());              
-            arrayFol.forEach((arrayFol1) -> {
-                System.out.println(arrayFol1);
-            });    
+        DBObject query = new BasicDBObject("username", username);
+        DBCursor cursor  = colUsuarios.find(query);
+        while (cursor.hasNext()){
+            arrayFollows = (List<DBObject>) cursor.next().get("follows");            
         }
-        cursor.close();*/
+        cursor.close();
+        
+        for(i = 0;i < arrayFollows.size();i++){
+            query = new BasicDBObject("user.username", arrayFollows.get(i));
+            cursor  = colMensaxes.find(query);
+            while (cursor.hasNext()){
+                BasicDBObject dbo = (BasicDBObject) cursor.next();
+                DBObject object = (DBObject) dbo.get("user");
+                
+                System.out.println("\n" + object.get("username"));
+                System.out.println(object.get("nome"));
+                System.out.println(dbo.get("text")); 
+                System.out.println(dbo.get("date") + "\n");                 
+            }
+            cursor.close();
+        }
+        arrayFollows.clear();
     }
 
-    private static void buscarUsuario() {
+    private static void buscarUsuario(String username) {
         System.out.println("Indique o username de usuario a procurar:\n");
-        username = teclado.nextLine();
+        String user = teclado.nextLine();
         
         BasicDBObject regexQuery = new BasicDBObject();
         regexQuery.put("username", 
-            new BasicDBObject("$regex", ".*" + username + ".*")
+            new BasicDBObject("$regex", ".*" + user + ".*")
             .append("$options", "i"));
         
         DBCursor cursor = colUsuarios.find(regexQuery);
+        
         while (cursor.hasNext()) {
-            System.out.println(cursor.next());
+            arrayFol.add(cursor.next().get("username").toString());
         }   
-    }                
+        
+        if(arrayFol.size() > 0){
+            System.out.println("\nUsuarios atopados:\n");
+            for(i = 0;i < arrayFol.size();i++){                
+                System.out.println(i + "." + arrayFol.get(i));
+            }     
+            System.out.println("\nElixa o número do usuario que quere comezar a seguir:\n");
+            try{
+                i = Integer.parseInt(teclado.nextLine());
+            }catch(NumberFormatException nfe){
+                System.out.println("\nValor incorrecto. Volvendo ó menú inicio...\n");
+                return;
+            }
+            
+            if(i <= arrayFol.size()){ 
+                DBObject query = new BasicDBObject("username",username );
+                DBObject list = new BasicDBObject("follows",arrayFol.get(i));
+                DBObject updateQuery = new BasicDBObject("$push", list);
+                colUsuarios.update(query, updateQuery);
+                System.out.println("\nUsuario engadido para o seu seguimento....\n");
+            }
+        }else{
+            System.out.println("\nNon se atoparon usuarios que coincidan.\n");
+        }
+        arrayFol.clear();
+    }               
+    
 }
-/*{
-    "text":"Este é un exemplo de miniTwitter #MiniTwitter #AccesoADatos",
-    "user":{
-        "nome": "Manuel Varela",
-        "username": "manu"
-    },
-    "date":"2016-05-18T16:00:00Z",
-    "hashtags":["MiniTwitter","AccesoADatos"]
-}*/

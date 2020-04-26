@@ -3,15 +3,14 @@ package ad.chios;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import com.mongodb.MongoClient;
-import com.mongodb.client.model.DBCollectionFindOptions;
-import com.mongodb.client.model.Filters;
-import com.mongodb.client.model.Projections;
-import com.mongodb.client.model.Sorts;
+import com.mongodb.MongoClientURI;
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
+import com.mongodb.client.MongoDatabase;
+import static com.mongodb.client.model.Sorts.descending;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -19,7 +18,6 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -27,35 +25,41 @@ import java.util.Scanner;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.bson.BsonDocument;
+import org.bson.Document;
 import org.bson.conversions.Bson;
 
 /**
  *
- * @author Hemihundias
+ * @author David Pardo
  */
 
+//Clase principal da nosa aplicación na que están contidos os métodos para traballar con ela
 public class Menu {    
     private static BaseDatos bd;
     private static Scanner teclado = new Scanner(System.in);
     private static MongoClient mongo;
     private static File datos = new File("config.json");
-    private static String entrada, nome, username, contrasinal, text, hashtag, follow;
+    private static String entrada, nome, username, contrasinal, hashtag;
     private static final String  PATTERN = "#[a-zA-Zñáéíóúü]+";
-    private static DBCollection colUsuarios, colMensaxes;
-    private static DB mdb;
+    private static MongoCollection colUsuarios, colMensaxes;
+    private static MongoDatabase mdb;
     private static List<String> arrayHashtags = new ArrayList<String>();
     private static List<DBObject> arrayFollows = new ArrayList<DBObject>();
     private static List<String> arrayFol = new ArrayList<String>();
     private static int i;
     
+    //Método main dende o que configuramos a conexión á BD e chamamos ao menú 
+    //de loguin
     public static void main(String args[]){                     
         confBD();        
         try{
-            mongo = new MongoClient(bd.getAddress(),bd.getPort());
-            mdb = mongo.getDB(bd.getDbname());
-            colUsuarios = mdb.getCollection("usuarios");
-            colMensaxes = mdb.getCollection("mensaxes");
+            mongo = new MongoClient(new MongoClientURI("mongodb://"+bd.getAddress()
+                    +":"+bd.getPort()+"@"+bd.getUsername()+":"+bd.getPassword()+"?retryWrites=false"));
+            //Para conexion sin autentificación
+            //mongo = new MongoClient(bd.getAddress(),bd.getPort());
+            mdb = mongo.getDatabase(bd.getDbname());
+            colUsuarios = mdb.getCollection("usuario");
+            colMensaxes = mdb.getCollection("mensaxe");
         }catch (Exception e){
             
         }        
@@ -63,6 +67,7 @@ public class Menu {
             
     }
     
+    //Método para a carga dos datos de conexión á BD
     public static void confBD(){
         if(datos.exists()){
 
@@ -91,6 +96,7 @@ public class Menu {
         } 
     }    
     
+    //Segunda opción do menú loguin, mediante a cal rexistramos a un novo usuario 
     public static void rexistro(){
         
         System.out.println("Rexistro\n");
@@ -107,25 +113,30 @@ public class Menu {
         System.out.println("Introsuza un contrasinal:\n");
             contrasinal = teclado.nextLine();               
                 
-        DBObject usuario = new BasicDBObject()
+        Document usuario = new Document()
             .append("nome", nome)
             .append("username", username)
             .append("contrasinal", contrasinal);
 
-        colUsuarios.insert(usuario);    
+        colUsuarios.insertOne(usuario);    
         arrayFollows.clear();
         System.out.println("Usuario rexistrado.\n");
     }
     
-    public static boolean consultaUsername(String username){   
-        DBObject query = new BasicDBObject("username",username );
-        DBCursor cursor = colUsuarios.find(query);
+    //Método chamado dende rexistro() mediante o cal facemos unha consulta á BD 
+    //para comprobar se xa existe o username
+    public static boolean consultaUsername(String username){        
+        Document findDocument = new Document("username", username);
+        MongoCursor<Document> cursor = colUsuarios.find(findDocument).iterator();
+        
         if (cursor.hasNext()){             
             return true;            
         }
         return false;                
     }       
     
+    //Primeira opción do menú loguin coa cal os usuarios rexistrados poden acceder 
+    //ao menú inicio
     public static void login(){
         System.out.println("Login:\n");
         
@@ -147,6 +158,7 @@ public class Menu {
         menuInicio(username);
     }
     
+    //Método chamado dende login() para comprobar que se inxeriron ben os datos de acceso
     public static boolean consultaContrasinal(String username, String contrasinal){
         BasicDBObject andQuery = new BasicDBObject();
         List<BasicDBObject> obj = new ArrayList<>();
@@ -154,13 +166,14 @@ public class Menu {
 	obj.add(new BasicDBObject("contrasinal", contrasinal));
 	andQuery.put("$and", obj);
         
-        DBCursor cursor = colUsuarios.find(andQuery);
-        while (cursor.hasNext()){             
+        MongoCursor<Document> result = colUsuarios.find(andQuery).iterator();
+        while (result.hasNext()){             
             return true;
         }
         return false;    
     }
     
+    //Menú inicio dende o cal elixiremos que vamos a facer
     public static void menuInicio(String username){
                 
         while(true){
@@ -200,15 +213,17 @@ public class Menu {
         }
     }
     
+    //Metodo para a obtención da data actual
     public static String getDate(){      
         DateFormat df = new SimpleDateFormat( "EEE, d MMM yyyy HH:mm:ss z", Locale.ENGLISH);
         df.setTimeZone(TimeZone.getTimeZone("GMT"));
         return df.format(new Date());
     }
     
+    //Método para obter o nome dun usuario mediante o seu username
     public static String consultaNome(String username){
-        DBObject query = new BasicDBObject("username",username );
-        DBCursor cursor = colUsuarios.find(query);
+        Document findDocument = new Document("username", username);
+        MongoCursor<Document> cursor = colUsuarios.find(findDocument).iterator();
         String nameAux = null;
         try{
             while (cursor.hasNext()){             
@@ -220,6 +235,7 @@ public class Menu {
         return nameAux;  
     }
     
+    //Método mediante o que podremos escribir unha mensaxe e inxerila na BD
     public static void escribirmensaxe(){                
         System.out.println("Agora escriba a mensaxe e pulse enter ao rematar.\n");
         String mensaxeEscrita = teclado.nextLine();                    
@@ -231,45 +247,39 @@ public class Menu {
             arrayHashtags.add(matcher.group().substring(1));            
         }
         
-        DBObject mensaxe = new BasicDBObject()
+        Document mensaxe = new Document()
                 .append("text", mensaxeEscrita)
                 .append("user", new BasicDBObject()
                         .append("nome", consultaNome(username))
                         .append("username", username))
                 .append("date", getDate())
                 .append("hashtags", arrayHashtags);
-        
-        
-        colMensaxes.insert(mensaxe);
+                
+        colMensaxes.insertOne(mensaxe);
         arrayHashtags.clear();
         System.out.println("\nMensaxe escrita correctamente.\n");
     }
     
+    //Método que lista todas as mensaxes contidas na BD
     public static void listarMensaxes(){
-        DBCollectionFindOptions options = new DBCollectionFindOptions();
-        Bson projectionAux = Projections.include(Arrays.asList("user.nome","user.username","text","date"));
-        DBObject projection = new BasicDBObject(projectionAux.toBsonDocument(BsonDocument.class, 
-            MongoClient.getDefaultCodecRegistry()));
-        options.projection(projection);
-        options.limit(5);
-        Bson sortAux = Sorts.descending("date");
-        DBObject sort = new BasicDBObject(sortAux.toBsonDocument(BsonDocument.class, 
-            MongoClient.getDefaultCodecRegistry()));
-        options.sort(sort);
-        DBCursor cursor  = colMensaxes.find(new BasicDBObject(),options);
-        while (cursor.hasNext()){         
-            BasicDBObject object = (BasicDBObject) cursor.next();
-            DBObject bdo = (DBObject) object.get("user");
+        FindIterable<Document> result  = colMensaxes.find();
+        result.limit(5);        
+        Bson sort = descending("date");
+        result.sort(sort);
+        for(Document doc:result){
+            Document bdo = doc;
+            Document object = (Document) doc.get("user");
             
-            System.out.println(bdo.get("\n" + "username"));
-            System.out.println(bdo.get("nome"));
-            System.out.println(object.get("text"));
-            System.out.println(object.get("date" + "\n"));
-            
+            System.out.println("\n" + object.getString("username"));
+            System.out.println(object.getString("nome"));
+            System.out.println(bdo.getString("text"));
+            System.out.println(bdo.getString("date") + "\n");
         }
-        cursor.close();
+        
+        result.cursor().close();
     }
     
+    //Método mediante o que podemos buscar mensaxes mediante un hashtag
     public static void buscarHastag(){
                 
         System.out.println("\nIntroduza o hastag a buscar:\n");
@@ -279,18 +289,23 @@ public class Menu {
             hashtag = teclado.nextLine();
         }        
         
-        Bson filter = Filters.eq("hashtags", hashtag.substring(1));
-        DBObject query = new BasicDBObject(filter.toBsonDocument(BsonDocument.class, 
-                MongoClient.getDefaultCodecRegistry()));
+        String fhashtag = hashtag.substring(1);
         
-        DBCursor cursor  = colMensaxes.find(query);
+        Document query = new Document("hashtags", fhashtag);        
+        MongoCursor<Document> cursor  = colMensaxes.find(query).iterator();
         while (cursor.hasNext()){
-            DBObject documentoAux = cursor.next();
-            System.out.println(documentoAux.toString());
+            Document object = cursor.next();
+            Document doc = (Document) object.get("user");
+
+            System.out.println("\n" + doc.getString("username"));
+            System.out.println(doc.getString("nome"));
+            System.out.println(object.getString("text"));
+            System.out.println(object.getString("date") + "\n");
         }
         cursor.close();
     }
     
+    //Menú loguin mediante o que podemos rexistrarnos, acceder ou saír da aplicación
     public static void menuLoguin(){
         System.out.println("Benvido a Chíos.\n");        
         while(true){
@@ -314,25 +329,25 @@ public class Menu {
                 default:
                     System.out.println("Opción inválida.\n");
                     break;
-            }                          
-                         
+            }           
         }
     }
 
+    //Método que lista as mensaxes das persoas que sigue o usuario actual
     private static void mensaxesFollows(String username) {
-        DBObject query = new BasicDBObject("username", username);
-        DBCursor cursor  = colUsuarios.find(query);
+        Document query = new Document("username", username);
+        MongoCursor<Document> cursor  = colUsuarios.find(query).iterator();
         while (cursor.hasNext()){
             arrayFollows = (List<DBObject>) cursor.next().get("follows");            
         }
         cursor.close();
         
         for(i = 0;i < arrayFollows.size();i++){
-            query = new BasicDBObject("user.username", arrayFollows.get(i));
-            cursor  = colMensaxes.find(query);
+            query = new Document("user.username", arrayFollows.get(i));
+            cursor  = colMensaxes.find(query).iterator();
             while (cursor.hasNext()){
-                BasicDBObject dbo = (BasicDBObject) cursor.next();
-                DBObject object = (DBObject) dbo.get("user");
+                Document dbo = cursor.next();
+                Document object = (Document) dbo.get("user");
                 
                 System.out.println("\n" + object.get("username"));
                 System.out.println(object.get("nome"));
@@ -344,16 +359,18 @@ public class Menu {
         arrayFollows.clear();
     }
 
+    //Método mediante o que podemos buscar usuarios na BD mediante coincidencia 
+    //total ou parcialco seu username
     private static void buscarUsuario(String username) {
         System.out.println("Indique o username de usuario a procurar:\n");
         String user = teclado.nextLine();
         
-        BasicDBObject regexQuery = new BasicDBObject();
+        Document regexQuery = new Document();
         regexQuery.put("username", 
             new BasicDBObject("$regex", ".*" + user + ".*")
             .append("$options", "i"));
         
-        DBCursor cursor = colUsuarios.find(regexQuery);
+        MongoCursor<Document> cursor = colUsuarios.find(regexQuery).iterator();
         
         while (cursor.hasNext()) {
             arrayFol.add(cursor.next().get("username").toString());
@@ -373,16 +390,15 @@ public class Menu {
             }
             
             if(i <= arrayFol.size()){ 
-                DBObject query = new BasicDBObject("username",username );
-                DBObject list = new BasicDBObject("follows",arrayFol.get(i));
-                DBObject updateQuery = new BasicDBObject("$push", list);
-                colUsuarios.update(query, updateQuery);
+                Bson query = new Document("username",username);
+                Bson list = new BasicDBObject("follows",arrayFol.get(i));
+                Bson updateQuery = new BasicDBObject("$push", list);
+                colUsuarios.updateOne(query, updateQuery);
                 System.out.println("\nUsuario engadido para o seu seguimento....\n");
             }
         }else{
             System.out.println("\nNon se atoparon usuarios que coincidan.\n");
         }
         arrayFol.clear();
-    }               
-    
+    }           
 }

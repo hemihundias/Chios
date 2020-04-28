@@ -5,8 +5,6 @@ import com.google.gson.JsonSyntaxException;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import com.mongodb.MongoClient;
-import com.mongodb.MongoClientURI;
-import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
@@ -15,14 +13,11 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
+import java.util.Calendar;
 import java.util.List;
-import java.util.Locale;
 import java.util.Scanner;
-import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.bson.Document;
@@ -46,23 +41,25 @@ public class Menu {
     private static List<String> arrayHashtags = new ArrayList<String>();
     private static List<DBObject> arrayFollows = new ArrayList<DBObject>();
     private static List<String> arrayFol = new ArrayList<String>();
+    private static List<Document> list = new ArrayList<Document>();
     private static int i;
     
     //Método main dende o que configuramos a conexión á BD e chamamos ao menú 
     //de loguin
     public static void main(String args[]){                     
         confBD();        
-        try{
-            mongo = new MongoClient(new MongoClientURI("mongodb://"+bd.getAddress()
-                    +":"+bd.getPort()+"@"+bd.getUsername()+":"+bd.getPassword()+"?retryWrites=false"));
-            //Para conexion sin autentificación
-            //mongo = new MongoClient(bd.getAddress(),bd.getPort());
+        try{            
+            //mongo = new MongoClient(new MongoClientURI("mongodb://"+bd.getUsername()
+              //      +":"+bd.getPassword()+"@"+bd.getAddress()+":"+bd.getPort()+ "/" 
+                //    + bd.getDbname() + "?retryWrites=false"));
+            mongo = new MongoClient(bd.getAddress(),bd.getPort());
             mdb = mongo.getDatabase(bd.getDbname());
-            colUsuarios = mdb.getCollection("usuario");
-            colMensaxes = mdb.getCollection("mensaxe");
+            colUsuarios = mdb.getCollection("usuarios");
+            colMensaxes = mdb.getCollection("mensaxes");
         }catch (Exception e){
-            
-        }        
+            System.err.println(e);
+        }                            
+        
         menuLoguin();
             
     }
@@ -116,7 +113,7 @@ public class Menu {
         Document usuario = new Document()
             .append("nome", nome)
             .append("username", username)
-            .append("contrasinal", contrasinal);
+            .append("password", contrasinal);
 
         colUsuarios.insertOne(usuario);    
         arrayFollows.clear();
@@ -126,6 +123,7 @@ public class Menu {
     //Método chamado dende rexistro() mediante o cal facemos unha consulta á BD 
     //para comprobar se xa existe o username
     public static boolean consultaUsername(String username){        
+        
         Document findDocument = new Document("username", username);
         MongoCursor<Document> cursor = colUsuarios.find(findDocument).iterator();
         
@@ -163,7 +161,7 @@ public class Menu {
         BasicDBObject andQuery = new BasicDBObject();
         List<BasicDBObject> obj = new ArrayList<>();
 	obj.add(new BasicDBObject("username", username));
-	obj.add(new BasicDBObject("contrasinal", contrasinal));
+	obj.add(new BasicDBObject("password", contrasinal));
 	andQuery.put("$and", obj);
         
         MongoCursor<Document> result = colUsuarios.find(andQuery).iterator();
@@ -215,9 +213,10 @@ public class Menu {
     
     //Metodo para a obtención da data actual
     public static String getDate(){      
-        DateFormat df = new SimpleDateFormat( "EEE, d MMM yyyy HH:mm:ss z", Locale.ENGLISH);
-        df.setTimeZone(TimeZone.getTimeZone("GMT"));
-        return df.format(new Date());
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.DATE, -1);
+        SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd|HH:mm:ss");
+        return formatDate.format(cal.getTime());        
     }
     
     //Método para obter o nome dun usuario mediante o seu username
@@ -261,27 +260,19 @@ public class Menu {
     }
     
     //Método que lista todas as mensaxes contidas na BD
-    public static void listarMensaxes(){
-        FindIterable<Document> result  = colMensaxes.find();
-        result.limit(5);        
-        Bson sort = descending("date");
-        result.sort(sort);
-        for(Document doc:result){
-            Document bdo = doc;
-            Document object = (Document) doc.get("user");
-            
-            System.out.println("\n" + object.getString("username"));
-            System.out.println(object.getString("nome"));
-            System.out.println(bdo.getString("text"));
-            System.out.println(bdo.getString("date") + "\n");
+    public static void listarMensaxes(){  
+        MongoCursor<Document> cursor  = colMensaxes.find().sort(descending("date")).iterator();
+        while(cursor.hasNext()){
+            list.add(cursor.next());                        
         }
         
-        result.cursor().close();
+        paxinar();
+        
+        cursor.close();
     }
     
     //Método mediante o que podemos buscar mensaxes mediante un hashtag
-    public static void buscarHastag(){
-                
+    public static void buscarHastag(){         
         System.out.println("\nIntroduza o hastag a buscar:\n");
         hashtag = teclado.nextLine();
         while(!hashtag.matches(PATTERN)){
@@ -291,18 +282,16 @@ public class Menu {
         
         String fhashtag = hashtag.substring(1);
         
-        Document query = new Document("hashtags", fhashtag);        
+        Document query = new Document("hashtags", fhashtag);  
         MongoCursor<Document> cursor  = colMensaxes.find(query).iterator();
-        while (cursor.hasNext()){
-            Document object = cursor.next();
-            Document doc = (Document) object.get("user");
-
-            System.out.println("\n" + doc.getString("username"));
-            System.out.println(doc.getString("nome"));
-            System.out.println(object.getString("text"));
-            System.out.println(object.getString("date") + "\n");
+        while(cursor.hasNext()){
+            list.add(cursor.next());                        
         }
+            
+        paxinar();
+                
         cursor.close();
+        
     }
     
     //Menú loguin mediante o que podemos rexistrarnos, acceder ou saír da aplicación
@@ -342,21 +331,23 @@ public class Menu {
         }
         cursor.close();
         
+        if(arrayFollows == null){
+            System.out.println("Non se sigue a ningún usuario.");
+            return;
+        }           
+                
         for(i = 0;i < arrayFollows.size();i++){
             query = new Document("user.username", arrayFollows.get(i));
             cursor  = colMensaxes.find(query).iterator();
-            while (cursor.hasNext()){
-                Document dbo = cursor.next();
-                Document object = (Document) dbo.get("user");
-                
-                System.out.println("\n" + object.get("username"));
-                System.out.println(object.get("nome"));
-                System.out.println(dbo.get("text")); 
-                System.out.println(dbo.get("date") + "\n");                 
+            while(cursor.hasNext()){
+                list.add(cursor.next());                        
             }
-            cursor.close();
-        }
+            
+            paxinar();
+        }   
+        
         arrayFollows.clear();
+        cursor.close();
     }
 
     //Método mediante o que podemos buscar usuarios na BD mediante coincidencia 
@@ -400,5 +391,39 @@ public class Menu {
             System.out.println("\nNon se atoparon usuarios que coincidan.\n");
         }
         arrayFol.clear();
-    }           
+    }         
+    
+    //Método para paxinar
+    private static void paxinar(){        
+        int x = 0;
+        int y = 5;
+
+        while(true){
+            if(y > list.size()){
+                y = list.size();
+            }
+
+            for(i = (0 + x);i< y;i++){
+                Document bdo = list.get(i);
+                Document object = (Document) bdo.get("user");
+
+                System.out.println("\n" + object.getString("username"));
+                System.out.println(object.getString("nome"));
+                System.out.println(bdo.getString("text"));
+                System.out.println(bdo.getString("date") + "\n");
+            }                        
+
+            if(y == list.size()){
+                System.out.println("Non hai máis mensaxes que mostrar.");
+                break;
+            }
+
+            x = x + 5;
+            y = y + 5;
+
+            System.out.println("Pulse calquer tecla para ver máis mensaxes.");
+            teclado.nextLine();
+        } 
+        list.clear();
+    }
 }

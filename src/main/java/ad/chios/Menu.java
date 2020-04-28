@@ -5,6 +5,7 @@ import com.google.gson.JsonSyntaxException;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import com.mongodb.MongoClient;
+import com.mongodb.MongoClientURI;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
@@ -49,13 +50,13 @@ public class Menu {
     public static void main(String args[]){                     
         confBD();        
         try{            
-            //mongo = new MongoClient(new MongoClientURI("mongodb://"+bd.getUsername()
-              //      +":"+bd.getPassword()+"@"+bd.getAddress()+":"+bd.getPort()+ "/" 
-                //    + bd.getDbname() + "?retryWrites=false"));
-            mongo = new MongoClient(bd.getAddress(),bd.getPort());
+            mongo = new MongoClient(new MongoClientURI("mongodb://"+bd.getUsername()
+                +":"+bd.getPassword()+"@"+bd.getAddress()+":"+bd.getPort()+ "/" 
+                + bd.getDbname() + "?retryWrites=false"));
+            //mongo = new MongoClient(bd.getAddress(),bd.getPort());
             mdb = mongo.getDatabase(bd.getDbname());
-            colUsuarios = mdb.getCollection("usuarios");
-            colMensaxes = mdb.getCollection("mensaxes");
+            colUsuarios = mdb.getCollection("usuario");
+            colMensaxes = mdb.getCollection("mensaxe");
         }catch (Exception e){
             System.err.println(e);
         }                            

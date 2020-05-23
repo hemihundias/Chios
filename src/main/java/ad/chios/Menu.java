@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Matcher;
@@ -213,11 +214,10 @@ public class Menu {
     }
     
     //Metodo para a obtención da data actual
-    public static String getDate(){      
-        Calendar cal = Calendar.getInstance();
-        cal.add(Calendar.DATE, -1);
-        SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd|HH:mm:ss");
-        return formatDate.format(cal.getTime());        
+    public static Date getDate(){      
+        Date now = new Date();
+        BasicDBObject timeNow = new BasicDBObject("date", now); 
+        return now;
     }
     
     //Método para obter o nome dun usuario mediante o seu username
@@ -411,7 +411,7 @@ public class Menu {
                 System.out.println("\n" + object.getString("username"));
                 System.out.println(object.getString("nome"));
                 System.out.println(bdo.getString("text"));
-                System.out.println(bdo.getString("date") + "\n");
+                System.out.println(bdo.getDate("date") + "\n");
             }                        
 
             if(y == list.size()){
